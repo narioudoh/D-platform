@@ -1,0 +1,15 @@
+### DATA PROCESSING 
+polars
+pandas
+### STORAGE SDK
+# boto3==1.40.17
+minio==7.2.18
+## orchestration
+prefect
+# transfromation
+# dbt-core
+# dbt-databricks
+
+
+
+ 

@@ -1,0 +1,11 @@
+# Secrets
+.env
+
+# Virtual Environment
+plat/
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/

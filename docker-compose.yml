@@ -1,0 +1,93 @@
+services:
+  minioserver:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKETS}
+    container_name: minioserver
+    env_file:
+      - .env
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/s3_data
+    networks:
+      - platform_net
+
+  mc-init:
+    image: minio/mc:RELEASE.2023-09-20T15-22-31Z  # Updated to latest stable version
+    depends_on:
+      - minioserver
+    entrypoint: >
+      /bin/sh -c "
+      until (mc alias set dlminio http://minioserver:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}) do echo '...waiting for MinIO...' && sleep 1; done;
+      mc mb --ignore-existing dlminio/warehouse-platform;
+      mc admin user list dlminio;
+      mc ls dlminio;
+      exit 0;
+      "
+    networks:
+      - platform_net
+
+
+
+  prefect-server:
+    image: prefecthq/prefect:3.0-python3.11
+    container_name: prefect_server
+    volumes:
+      - prefect_data:/root/.prefect
+    ports:
+      - "4200:4200"
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+    command: prefect server start
+    networks:
+      - platform_net
+
+  # Starts a worker that listens for jobs and spins up containers dynamically
+  prefect-worker:
+    image: prefecthq/prefect:3.0-python3.11
+    container_name: prefect_docker_worker
+    depends_on:
+      - prefect-server
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # Grants the worker permission to manage local docker images
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    command: prefect worker start --pool crypto-docker-pool --type docker
+    networks:
+      - platform_net
+
+
+networks:
+  platform_net:
+    driver: bridge
+
+volumes:
+  minio-data:
+  prefect_data:
+ 
+  
+
+
+
+
+# # mc-init:
+#     image: minio/mc:RELEASE.2023-09-20T15-22-31Z  # Updated to latest stable version
+#     depends_on:
+#       - minioserver
+#     entrypoint: >
+#       /bin/sh -c "
+#       until (mc alias set dlminio http://minioserver:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}) do echo '...waiting for MinIO...' && sleep 1; done;
+#       mc mb dlminio/warehouse-platform || echo 'Bucket already exists';
+#       mc admin user list dlminio;
+#       mc admin service restart dlminio;
+#       mc ls dlminio;
+#       tail -f /dev/null
+#       "
+#     networks:
+#       - platform_net
