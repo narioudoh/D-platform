@@ -1,0 +1,36 @@
+# prefect.yaml
+prefect-version: 3.0.0
+
+build:
+  - prefect.deployments.steps.build_docker_image:
+      id: build_image
+      requires: prefect-docker
+      image_name: "crypto-pipeline-image"
+      tag: "latest"
+      dockerfile: Dockerfile
+
+push:
+  - prefect.deployments.steps.push_docker_image:
+      requires: prefect-docker
+      image_name: "{{ build_image.image_name }}"
+      tag: "{{ build_image.tag }}"
+
+deployments:
+  - name: crypto-ingestion-pipeline
+    version: 1.0.0
+    entrypoint: processes/main.py:bronze_to_minio_flow
+    work_pool:
+      name: "crypto-docker-pool"
+      job_variables:
+        image: "crypto-pipeline-image:latest"
+        networks: ["platform_net"]
+        env:
+          AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT}
+          MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+          MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+          MINIO_BUCKET: ${MINIO_BUCKETS}
+          AWS_S3_SECURE: "false"
+    schedules:
+      - cron: "0 0 * * *"
+        timezone: "UTC"
+        active: true
